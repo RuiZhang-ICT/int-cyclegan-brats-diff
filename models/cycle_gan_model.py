@@ -27,8 +27,10 @@ class CycleGANModel(BaseModel):
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
         self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
-        visual_names_A = ['real_A', 'fake_B', 'rec_A']
-        visual_names_B = ['real_B', 'fake_A', 'rec_B']
+        #visual_names_A = ['real_A', 'fake_B', 'rec_A']
+        #visual_names_B = ['real_B', 'fake_A', 'rec_B']
+        visual_names_A = ['real_A', 'fake_B', 'rec_A', 'diff_B'] # rui
+        visual_names_B = ['real_B', 'fake_A', 'rec_B', 'diff_A'] # rui
         if self.isTrain and self.opt.lambda_identity > 0.0:
             visual_names_A.append('idt_A')
             visual_names_B.append('idt_B')
@@ -78,11 +80,27 @@ class CycleGANModel(BaseModel):
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
     def forward(self):
-        self.fake_B = self.netG_A(self.real_A)
-        self.rec_A = self.netG_B(self.fake_B)
+        # rui edit start
+        self.diff_B = self.netG_A(self.real_A)
+        self.fake_B = self.diff_B + self.real_A
+        self.fake_B = torch.clamp(self.fake_B, -1.0, 1.0)
+        self.diff_B_rec = self.netG_B(self.fake_B)
+        self.rec_A = self.diff_B_rec + self.fake_B
+        self.rec_A = torch.clamp(self.rec_A, -1.0, 1.0)
 
-        self.fake_A = self.netG_B(self.real_B)
-        self.rec_B = self.netG_A(self.fake_A)
+        self.diff_A = self.netG_B(self.real_B)
+        self.fake_A = self.diff_A + self.real_B
+        self.fake_A = torch.clamp(self.fake_A, -1.0, 1.0)
+        self.diff_A_rec = self.netG_A(self.fake_A)
+        self.rec_B = self.diff_A_rec + self.fake_A
+        self.rec_B = torch.clamp(self.rec_B, -1.0, 1.0)
+
+        #self.fake_B = self.netG_A(self.real_A)
+        #self.rec_A = self.netG_B(self.fake_B)
+
+        #self.fake_A = self.netG_B(self.real_B)
+        #self.rec_B = self.netG_A(self.fake_A)
+        # rui edit end
 
     def backward_D_basic(self, netD, real, fake):
         # Real
