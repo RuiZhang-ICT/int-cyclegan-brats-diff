@@ -25,7 +25,8 @@ class CycleGANModel(BaseModel):
         BaseModel.initialize(self, opt)
 
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
-        self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
+        self.loss_names = ['D_A', 'G_A', 'cycle_A', 'D_B', 'G_B', 'cycle_B'] # rui
+        #self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
         #visual_names_A = ['real_A', 'fake_B', 'rec_A']
         #visual_names_B = ['real_B', 'fake_A', 'rec_B']
@@ -131,9 +132,13 @@ class CycleGANModel(BaseModel):
         if lambda_idt > 0:
             # G_A should be identity if real_B is fed.
             self.idt_A = self.netG_A(self.real_B)
+            self.idt_A = self.idt_A + self.real_B # rui
+            self.idt_A = torch.clamp(self.idt_A, -1.0, 1.0) # rui
             self.loss_idt_A = self.criterionIdt(self.idt_A, self.real_B) * lambda_B * lambda_idt
             # G_B should be identity if real_A is fed.
             self.idt_B = self.netG_B(self.real_A)
+            self.idt_B = self.idt_B + self.real_A # rui
+            self.idt_B = torch.clamp(self.idt_B, -1.0, 1.0) # rui
             self.loss_idt_B = self.criterionIdt(self.idt_B, self.real_A) * lambda_A * lambda_idt
         else:
             self.loss_idt_A = 0
