@@ -18,6 +18,7 @@ class CycleGANModel(BaseModel):
             parser.add_argument('--lambda_B', type=float, default=10.0,
                                 help='weight for cycle loss (B -> A -> B)')
             parser.add_argument('--lambda_identity', type=float, default=0.5, help='use identity mapping. Setting lambda_identity other than 0 has an effect of scaling the weight of the identity mapping loss. For example, if the weight of the identity loss should be 10 times smaller than the weight of the reconstruction loss, please set lambda_identity = 0.1')
+            parser.add_argument('--lambda_l1', type=float, default=0) # rui
 
         return parser
 
@@ -25,7 +26,7 @@ class CycleGANModel(BaseModel):
         BaseModel.initialize(self, opt)
 
         # specify the training losses you want to print out. The program will call base_model.get_current_losses
-        self.loss_names = ['D_A', 'G_A', 'cycle_A', 'D_B', 'G_B', 'cycle_B'] # rui
+        self.loss_names = ['D_A', 'G_A', 'cycle_A', 'D_B', 'G_B', 'cycle_B', 'l1_A', 'l1_B'] # rui
         #self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
         # specify the images you want to save/display. The program will call base_model.get_current_visuals
         #visual_names_A = ['real_A', 'fake_B', 'rec_A']
@@ -70,6 +71,7 @@ class CycleGANModel(BaseModel):
                                                 lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()),
                                                 lr=opt.lr, betas=(opt.beta1, 0.999))
+            self.criterionL1 = torch.nn.L1Loss() # rui
             self.optimizers = []
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
@@ -144,6 +146,21 @@ class CycleGANModel(BaseModel):
             self.loss_idt_A = 0
             self.loss_idt_B = 0
 
+        # rui
+        lambda_l1 = self.opt.lambda_l1
+        if lambda_l1 > 0:
+            zero_map = torch.zeros_like(self.diff_A)
+            self.loss_diff_A = self.criterionL1(self.diff_A, zero_map)
+            self.loss_diff_A_rec = self.criterionL1(self.diff_A_rec, zero_map)
+            self.loss_diff_B = self.criterionL1(self.diff_B, zero_map)
+            self.loss_diff_B_rec = self.criterionL1(self.diff_B_rec, zero_map)
+            self.loss_l1_A = (self.loss_diff_A + self.loss_diff_A_rec) * lambda_l1
+            self.loss_l1_B = (self.loss_diff_B + self.loss_diff_B_rec) * lambda_l1
+        else:
+            self.loss_l1_A = 0
+            self.loss_l1_B = 0
+        # rui
+
         # GAN loss D_A(G_A(A))
         self.loss_G_A = self.criterionGAN(self.netD_A(self.fake_B), True)
         # GAN loss D_B(G_B(B))
@@ -153,7 +170,9 @@ class CycleGANModel(BaseModel):
         # Backward cycle loss
         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
         # combined loss
-        self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
+        #self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B
+        self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_l1_A + self.loss_l1_B # rui
+
         self.loss_G.backward()
 
     def optimize_parameters(self):
